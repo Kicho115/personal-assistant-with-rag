@@ -4,10 +4,10 @@ import glob as globmod
 from typing import Any
 import numpy as np
 import faiss
-from langchain_core.documents import Document
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sentence_transformers import SentenceTransformer
 from openai import OpenAI
+
+from helpers.documents import load_documents
 
 # Default configs
 DEFAULT_DATA_DIR = "data"
@@ -59,18 +59,6 @@ def resolve_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
         raise ValueError("CHUNK_OVERLAP must be smaller than CHUNK_SIZE")
 
     return resolved
-
-
-def load_documents(data_dir: str = DEFAULT_DATA_DIR) -> list[Document]:
-    """Loads documents from the personal data folders.
-
-    The collection contains one LangChain Document per `.txt` file in the
-    emails, notes, SMS, and calendar folders. Each document stores the file text
-    as `page_content` and includes metadata for the source file path and
-    document type.
-    """
-    pass
-
 
 def split_documents(
         docs: list[Document],
@@ -164,7 +152,7 @@ class Assistant:
         resolved_config = resolve_config(config)
 
         print("Loading documents...")
-        docs = load_documents()
+        docs = load_documents(resolved_config["data_dir"], resolved_config["chunk_size"], resolved_config["chunk_overlap"])
         print(f"  Loaded {len(docs)} documents")
 
         print("Splitting into chunks...")
