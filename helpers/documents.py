@@ -3,7 +3,7 @@ import os
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-def load_documents(data_dir: str = "data", chunk_size: int = 256, chunk_overlap: int = 36) -> list[Document]:
+def load_documents(data_dir: str = "data") -> list[Document]:
     """Loads documents from the personal data folders.
 
     The collection contains one LangChain Document per `.txt` file in the
@@ -22,13 +22,24 @@ def load_documents(data_dir: str = "data", chunk_size: int = 256, chunk_overlap:
                     # TODO: checar si el calendario tiene mas metadatos
                     text = f.read()
                 doc = Document(page_content=text, metadata={"source": file_path, "type": folder})
-                chunks = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap).split_documents([doc])
-                docs.extend(chunks)
+                docs.append(doc)
 
     return docs
+
+def split_documents(docs: list[Document], chunk_size: int = 256, chunk_overlap: int = 36) -> list[Document]:
+    """Splits documents into overlapping chunks.
+
+    The resulting chunked Document objects use the configured chunk size and
+    overlap while preserving the original document metadata.
+    """
+    chunks = []
+    for doc in docs:
+        chunks.extend(RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap).split_documents([doc]))
+    return chunks
 
 # Pa testear :v
 if __name__ == "__main__":
     docs = load_documents("../data")
-    for doc in docs:
-        print(doc)
+    print(f"Loaded {len(docs)} documents")
+    chunks = split_documents(docs)
+    print(f"Split into {len(chunks)} chunks")

@@ -7,7 +7,7 @@ import faiss
 from sentence_transformers import SentenceTransformer
 from openai import OpenAI
 
-from helpers.documents import load_documents
+from helpers.documents import load_documents, split_documents
 
 # Default configs
 DEFAULT_DATA_DIR = "data"
@@ -59,19 +59,6 @@ def resolve_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
         raise ValueError("CHUNK_OVERLAP must be smaller than CHUNK_SIZE")
 
     return resolved
-
-def split_documents(
-        docs: list[Document],
-        chunk_size: int = DEFAULT_CHUNK_SIZE,
-        chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
-) -> list[Document]:
-    """Splits documents into overlapping chunks.
-
-    The resulting chunked Document objects use the configured chunk size and
-    overlap while preserving the original document metadata.
-    """
-    pass
-
 
 def build_index(
         chunks: list[Document],
