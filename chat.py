@@ -30,9 +30,9 @@ WELCOME = """
 def load_config_from_env() -> dict[str, str | None]:
     """Load raw RAG configuration values from environment variables."""
     return {
-        "api_key": os.getenv("OPENAI_API_KEY"),
-        "base_url": os.getenv("OPENAI_BASE_URL"),
-        "model": os.getenv("MODEL"),
+        "api_key": os.getenv("LLM_API_KEY"),
+        "base_url": os.getenv("LLM_API_URL"),
+        "model": os.getenv("LLM_MODEL"),
         "embedding_model": os.getenv("EMBEDDING_MODEL"),
         "top_k": os.getenv("TOP_K"),
         "chunk_size": os.getenv("CHUNK_SIZE"),
@@ -44,7 +44,7 @@ def main():
     print("Initializing assistant...")
     config = load_config_from_env()
     assistant = Assistant.from_config(config)
-    subprocess.call('cls' if os.name == 'nt' else 'clear')
+    subprocess.call('cls' if os.name == 'nt' else 'clear', shell=True)
 
     print(WELCOME)
 
@@ -64,7 +64,7 @@ def main():
 
         if question.lower() == "/clear":
             assistant.clear_history()
-            subprocess.call('cls' if os.name == 'nt' else 'clear')
+            subprocess.call('cls' if os.name == 'nt' else 'clear', shell=True)
             print("\nConversation history cleared.\n")
             continue
 

@@ -1,13 +1,16 @@
 # You might need the following imports. Feel free to change it if you opt for different libraries.
 import os
 import glob as globmod
-from typing import Any
+from typing import Any, Self
 import numpy as np
 import faiss
 from sentence_transformers import SentenceTransformer
 from openai import OpenAI
+from langchain_core.documents import Document
 
 from helpers.documents import load_documents, split_documents
+from helpers.embeddings import build_index
+
 
 # Default configs
 DEFAULT_DATA_DIR = "data"
@@ -47,6 +50,7 @@ def resolve_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
             "CHUNK_OVERLAP",
             config.get("chunk_overlap", DEFAULT_CHUNK_OVERLAP),
         ),
+        "data_dir": config.get("data_dir", DEFAULT_DATA_DIR),
     }
 
     if resolved["top_k"] <= 0:
@@ -59,18 +63,6 @@ def resolve_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
         raise ValueError("CHUNK_OVERLAP must be smaller than CHUNK_SIZE")
 
     return resolved
-
-def build_index(
-        chunks: list[Document],
-        embedding_model: SentenceTransformer,
-) -> faiss.IndexFlatIP:
-    """Creates a FAISS inner-product index for embedded document chunks.
-
-    The index contains normalized float32 embeddings generated from each
-    chunk's text with the provided embedding model.
-    """
-    pass
-
 
 def retrieve(
         query: str,
@@ -129,7 +121,7 @@ class Assistant:
         self.history.clear()
 
     @classmethod
-    def from_config(cls, config: dict[str, Any] | None = None) -> Assistant:
+    def from_config(cls, config: dict[str, Any] | None = None) -> Self:
         """Initializes the components required by the assistant and instantiates it
 
         The pipeline includes resolved configuration, loaded documents, chunked
@@ -139,7 +131,7 @@ class Assistant:
         resolved_config = resolve_config(config)
 
         print("Loading documents...")
-        docs = load_documents(resolved_config["data_dir"], resolved_config["chunk_size"], resolved_config["chunk_overlap"])
+        docs = load_documents(resolved_config["data_dir"])
         print(f"  Loaded {len(docs)} documents")
 
         print("Splitting into chunks...")
