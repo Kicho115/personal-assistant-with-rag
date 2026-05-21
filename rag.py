@@ -76,7 +76,19 @@ def retrieve(
     Results are ordered by similarity and include the chunk text, similarity
     score, and metadata for each matching chunk.
     """
-    pass
+    query_embedding = model.encode(query, convert_to_numpy=True)
+    query_embedding = np.array([query_embedding], dtype=np.float32)
+
+    scores, indices = index.search(query_embedding, k)
+    results=[]
+    for score, idx in zip(scores[0], indices[0]):
+        chunk = chunks[idx]
+        results.append({
+            "text": chunk.page_content,
+            "score": float(score),
+            "metadata": chunk.metadata,
+        })
+    return results
 
 
 SYSTEM_PROMPT = ""
@@ -114,6 +126,25 @@ class Assistant:
         conversation messages, and the system prompt. The assistant response is
         appended to history alongside the user message.
         """
+        k = k or self.top_k
+        retrieved_chunks = retrieve(question, self.index, self.model, self.chunks, k)
+
+        if not retrieved_chunks:
+            response = "Didn't find any relevant information in your documents. Can you try rephrasing or asking about something else?"
+            self.history.append({"role": "user", "content": question})
+            self.history.append({"role": "assistant", "content": response})
+            return response
+
+        context = "\n\n".join([
+            f"[{chunk['metadata']['type'].upper()}] {chunk['metadata']['source']}\n{chunk['text']}"
+            for chunk in retrieved_chunks
+        ])
+
+        messages = [
+            {"role": "system",
+             "content": "You are a helpful assistant. Answer questions based on the provided context. Always refer back to previous context when answering follow-up questions."},
+            {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {question}"}
+        ]
         pass
 
     def clear_history(self) -> None:
