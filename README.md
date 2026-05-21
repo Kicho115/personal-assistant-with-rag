@@ -10,3 +10,8 @@ EMBEDDING_MODEL=your_embedding_model
 CHUNK_SIZE=your_chunk_size
 CHUNK_OVERLAP=your_chunk_overlap
 ```
+
+Run the following command to install the required dependencies:
+```
+pip install -r requirements.txt
+```
