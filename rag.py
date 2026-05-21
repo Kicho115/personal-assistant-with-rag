@@ -156,7 +156,29 @@ class Assistant:
              "content": "You are a helpful assistant. Answer questions based on the provided context. Always refer back to previous context when answering follow-up questions."},
             {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {question}"}
         ]
-        pass
+
+        if self.history:
+            messages = messages[:1] + self.history + messages[1:]
+
+        response_obj = self.client.chat.completions.create(
+            model=self.llm_model,
+            messages=messages,
+            temperature=0.3,
+        )
+        response = response_obj.choices[0].message.content
+
+        reference_files = set()
+        for chunk in retrieved_chunks:
+            reference_files.add(chunk['metadata']['source'])
+
+        if reference_files:
+            references = "\n".join([f"  • {file}" for file in sorted(reference_files)])
+            response += f"\n\n*Reference:*\n{references}"
+
+        self.history.append({"role": "user", "content": question})
+        self.history.append({"role": "assistant", "content": response})
+
+        return response
 
     def clear_history(self) -> None:
         """Empties the conversation history."""
