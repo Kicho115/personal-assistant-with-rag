@@ -21,7 +21,8 @@ WELCOME = """
 ║                                                      ║
 ║  Ask me about emails, notes, SMS, and calendar.      ║
 ║  Type '/clear' to reset conversation history.        ║
-║  Try: what's the address for Laura's surprise party? ║
+║  Filter by type: /calendar /email /notes /sms       ║
+║  Try: search in my /calendar for dentist appointment ║
 ║  Type '/exit' to leave.                              ║
 ╚══════════════════════════════════════════════════════╝
 """
@@ -37,6 +38,7 @@ def load_config_from_env() -> dict[str, str | None]:
         "top_k": os.getenv("TOP_K"),
         "chunk_size": os.getenv("CHUNK_SIZE"),
         "chunk_overlap": os.getenv("CHUNK_OVERLAP"),
+        "overfetch_multiplier": os.getenv("OVERFETCH_MULTIPLIER"),
     }
 
 

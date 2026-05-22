@@ -138,13 +138,7 @@ class Assistant:
         appended to history alongside the user message.
         """
         k = k or self.top_k
-
-        augmented_query = question
-        if len(self.history) >= 2:
-            last_user_message = self.history[-2]["content"]
-            augmented_query = f"{last_user_message} {question}"
-
-        retrieved_chunks = retrieve(augmented_query, self.index, self.model, self.chunks, k)
+        retrieved_chunks = retrieve(question, self.index, self.model, self.chunks, k)
 
         if not retrieved_chunks:
             response = "Didn't find any relevant information in your documents. Can you try rephrasing or asking about something else?"
@@ -179,7 +173,7 @@ class Assistant:
 
         if reference_files:
             references = "\n".join([f"  • {file}" for file in sorted(reference_files)])
-            response += f"\n\nReference:\n{references}"
+            response += f"\n\n*Reference:*\n{references}"
 
         self.history.append({"role": "user", "content": question})
         self.history.append({"role": "assistant", "content": response})
