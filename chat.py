@@ -21,7 +21,7 @@ WELCOME = """
 ║                                                      ║
 ║  Ask me about emails, notes, SMS, and calendar.      ║
 ║  Type '/clear' to reset conversation history.        ║
-║  Filter by type: /calendar /email /notes /sms       ║
+║  Filter by type: /calendar /email /notes /sms        ║
 ║  Try: search in my /calendar for dentist appointment ║
 ║  Type '/exit' to leave.                              ║
 ╚══════════════════════════════════════════════════════╝
