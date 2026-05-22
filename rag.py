@@ -1,6 +1,7 @@
 # You might need the following imports. Feel free to change it if you opt for different libraries.
 import os
 import glob as globmod
+import re
 from typing import Any, Self
 import numpy as np
 import faiss
@@ -19,6 +20,42 @@ DEFAULT_LLM_MODEL = "gpt-4.1-mini"
 DEFAULT_CHUNK_SIZE = 256
 DEFAULT_CHUNK_OVERLAP = 32
 DEFAULT_TOP_K = 4
+DEFAULT_OVERFETCH_MULTIPLIER = 5
+
+TAG_TO_DOC_TYPE = {
+    "email": "emails",
+    "notes": "notes",
+    "sms": "sms",
+    "calendar": "calendar",
+}
+
+_TAG_PATTERN = re.compile(
+    r"/(?P<tag>email|notes|sms|calendar)\b",
+    re.IGNORECASE,
+)
+
+
+def parse_query_tags(question: str) -> tuple[str, set[str] | None]:
+    """Extract document-type tags from a question and return a clean search query.
+
+    Tags like /calendar map to metadata ``type`` values (e.g. ``calendar``).
+    When no tags are present, the original question is returned and the filter is None.
+    """
+    doc_types: set[str] = set()
+    for match in _TAG_PATTERN.finditer(question):
+        key = match.group("tag").lower()
+        doc_types.add(TAG_TO_DOC_TYPE[key])
+
+    clean_query = _TAG_PATTERN.sub("", question)
+    clean_query = re.sub(r"\s+", " ", clean_query).strip()
+
+    if not doc_types:
+        return question, None
+
+    if not clean_query:
+        clean_query = " ".join(sorted(doc_types))
+
+    return clean_query, doc_types
 
 
 def _parse_int_setting(name: str, value: Any) -> int:
@@ -51,6 +88,10 @@ def resolve_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
             config.get("chunk_overlap", DEFAULT_CHUNK_OVERLAP),
         ),
         "data_dir": config.get("data_dir", DEFAULT_DATA_DIR),
+        "overfetch_multiplier": _parse_int_setting(
+            "OVERFETCH_MULTIPLIER",
+            config.get("overfetch_multiplier", DEFAULT_OVERFETCH_MULTIPLIER),
+        ),
     }
 
     if resolved["top_k"] <= 0:
@@ -61,6 +102,8 @@ def resolve_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
         raise ValueError("CHUNK_OVERLAP must be >= 0")
     if resolved["chunk_overlap"] >= resolved["chunk_size"]:
         raise ValueError("CHUNK_OVERLAP must be smaller than CHUNK_SIZE")
+    if resolved["overfetch_multiplier"] <= 0:
+        raise ValueError("OVERFETCH_MULTIPLIER must be > 0")
 
     return resolved
 
@@ -70,24 +113,39 @@ def retrieve(
         model: SentenceTransformer,
         chunks: list[Document],
         k: int = DEFAULT_TOP_K,
+        doc_types: set[str] | None = None,
+        overfetch_multiplier: int = DEFAULT_OVERFETCH_MULTIPLIER,
 ) -> list[dict]:
     """Gets the most relevant chunks for a query.
 
     Results are ordered by similarity and include the chunk text, similarity
     score, and metadata for each matching chunk.
+
+    When ``doc_types`` is set, overfetching retrieves more candidates from the
+    index and keeps only chunks whose metadata ``type`` is in that set.
     """
+    fetch_k = k
+    if doc_types:
+        fetch_k = min(k * overfetch_multiplier, index.ntotal)
+
     query_embedding = model.encode(query, convert_to_numpy=True)
     query_embedding = np.array([query_embedding], dtype=np.float32)
 
-    scores, indices = index.search(query_embedding, k)
-    results=[]
+    scores, indices = index.search(query_embedding, fetch_k)
+    results = []
     for score, idx in zip(scores[0], indices[0]):
+        if idx < 0:
+            continue
         chunk = chunks[idx]
+        if doc_types and chunk.metadata.get("type") not in doc_types:
+            continue
         results.append({
             "text": chunk.page_content,
             "score": float(score),
             "metadata": chunk.metadata,
         })
+        if len(results) >= k:
+            break
     return results
 
 
@@ -128,6 +186,7 @@ class Assistant:
         self.config = resolve_config(config)
         self.llm_model = self.config["model"]
         self.top_k = self.config["top_k"]
+        self.overfetch_multiplier = self.config["overfetch_multiplier"]
         self.history: list[dict[str, str]] = []
 
     def ask(self, question: str, k: int | None = None) -> str:
@@ -138,10 +197,29 @@ class Assistant:
         appended to history alongside the user message.
         """
         k = k or self.top_k
-        retrieved_chunks = retrieve(question, self.index, self.model, self.chunks, k)
+        search_query, doc_types = parse_query_tags(question)
+        retrieved_chunks = retrieve(
+            search_query,
+            self.index,
+            self.model,
+            self.chunks,
+            k,
+            doc_types=doc_types,
+            overfetch_multiplier=self.overfetch_multiplier,
+        )
 
         if not retrieved_chunks:
-            response = "Didn't find any relevant information in your documents. Can you try rephrasing or asking about something else?"
+            if doc_types:
+                types_label = ", ".join(sorted(t.upper() for t in doc_types))
+                response = (
+                    f"Didn't find any relevant information in your {types_label} documents. "
+                    "Can you try rephrasing or asking about something else?"
+                )
+            else:
+                response = (
+                    "Didn't find any relevant information in your documents. "
+                    "Can you try rephrasing or asking about something else?"
+                )
             self.history.append({"role": "user", "content": question})
             self.history.append({"role": "assistant", "content": response})
             return response
@@ -151,10 +229,14 @@ class Assistant:
             for chunk in retrieved_chunks
         ])
 
+        question_line = question
+        if doc_types:
+            types_label = ", ".join(sorted(t.upper() for t in doc_types))
+            question_line = f"{question} (search limited to: {types_label})"
+
         messages = [
-            {"role": "system",
-             "content": "You are a helpful assistant. Answer questions based on the provided context. Always refer back to previous context when answering follow-up questions."},
-            {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {question}"}
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {question_line}"},
         ]
 
         if self.history:
